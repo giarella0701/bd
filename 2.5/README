@@ -1,0 +1,50 @@
+Este proyecto contiene la estructura y datos de ejemplo para una base de datos relacional llamada `ejemplo_Select`.
+Está diseñada para simular un sistema de gestión de:
+**usuarios**, **personas**, **ciudades** y **tipos de usuario**, 
+ideal para el desarrollo de **prototipos de sistemas administrativos**.
+
+Esta base de datos permite:
+
+- Almacenar diferentes tipos de usuarios con sus permisos asociados.
+- Registrar cuentas de usuario con información de contacto y contraseñas seguras.
+- Asociar personas con usuarios y ciudades.
+- Consultar datos usando relaciones entre tablas.
+- Realizar filtros por criterios como ciudad, tipo de usuario, fechas o nombres.
+
+Es útil para practicar consultas SQL, modelado de datos y operaciones CRUD (Crear, Leer, Actualizar, Eliminar).
+
+Estructura de Tablas:
+
+ 1. `tipo_usuarios`
+Define los tipos de usuarios del sistema.
+
+ 2. `usuarios`
+Lista de cuentas de usuarios con sus credenciales.
+
+3. `ciudad`
+Ciudades asociadas a las personas.
+
+4. `personas`
+Datos personales asociados a usuarios y ciudades.
+
+
+ #Datos de Ejemplo
+
+Se incluyen registros de ejemplo para cada tabla, como:
+
+- 3 tipos de usuarios (`Administrador`, `Cliente`, `Moderador`)
+- 10 usuarios con distintos niveles de acceso
+- 5 ciudades de distintas regiones
+- 10 personas relacionadas a usuarios y ciudades
+
+---
+
+## Consultas SQL Incluidas
+
+1. Mostrar usuarios de tipo Cliente
+2. Personas nacidas después de 1990
+3. Personas cuyos nombres comienzan con 'A'
+4. Usuarios con correo que termine en @mail.com
+5. Personas que no viven en Valparaíso
+6. Usuarios con nombre de más de 7 caracteres
+7. Personas nacidas entre 1990 y 1995
