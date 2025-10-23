@@ -140,14 +140,16 @@ def sp_restaurar(idRol: int):
 def menu():
     """Muestra un menú interactivo en consola para gestionar los roles."""
     while True:
-        print("\n===== MENÚ ROLES (MySQL + SP) =====")
-        print("1) Insertar rol")
-        print("2) Listar roles ACTIVOS")
-        print("3) Listar roles (TODOS)")
-        print("4) Borrado lógico por ID")
-        print("5) Restaurar rol por ID")
-        print("0) Salir")
-
+        print("|-----------------------------------------|")
+        print("|         MENÚ ROLES (MySQL + SP)         |")
+        print("|-----------------------------------------|")
+        print("| 1) Insertar rol                         |")
+        print("| 2) Listar roles ACTIVOS                 |")
+        print("| 3) Listar roles (TODOS)                 |")
+        print("| 4) Borrado lógico por ID                |")
+        print("| 5) Restaurar rol por ID                 |")
+        print("| 0) Salir                                |")
+        print("|-----------------------------------------|")
         opcion = input("Selecciona una opción: ").strip()
 
         if opcion == "1":
