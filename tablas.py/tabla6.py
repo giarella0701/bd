@@ -1,129 +1,122 @@
-# ==========================================
-# sp_menu_cambio.py
-# CRUD básico con Procedimientos Almacenados (MySQL) desde Python
-# Autor: Giarella
-# Propósito: Gestionar cambios de aplicación (insertar, listar, eliminar)
-# utilizando procedimientos almacenados y el conector oficial de MySQL.
-# ==========================================
-
 import mysql.connector
-from datetime import date
+from mysql.connector import Error
 
-# ---------- CONFIGURACIÓN DE CONEXIÓN ----------
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "1234",          # Cambia según tu configuración
-    "database": "sistema_seguridad_vial"  # Cambia por tu base de datos
-}
-
-# ---------- FUNCIÓN DE CONEXIÓN ----------
+# --- Conexión ---
 def conectar():
-    """Establece conexión con la base de datos MySQL."""
-    return mysql.connector.connect(**DB_CONFIG)
-
-# ---------- FUNCIONES PRINCIPALES ----------
-def sp_insertar_cambio(usuario_id: int, descripcion: str, version: str, fecha_cambio: date):
-    """
-    Inserta un nuevo cambio llamando al procedimiento almacenado:
-    sp_cambio_insertar(IN p_Usuarios_idUsuarios, IN p_descripcion_cambio, IN p_version_afectada, IN p_fecha_cambio)
-    """
-    cnx = cur = None
     try:
-        cnx = conectar()
-        cur = cnx.cursor()
-        cur.callproc("sp_cambio_insertar", [usuario_id, descripcion, version, fecha_cambio])
-        cnx.commit()
-        print(f"✅ Cambio insertado correctamente.")
-    except mysql.connector.Error as e:
-        print("❌ Error en sp_insertar_cambio:", e)
-        if cnx and cnx.is_connected():
-            try:
-                cnx.rollback()
-            except:
-                pass
+        conexion = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="1234",
+            database="sistema_seguridad_vial"
+        )
+        if conexion.is_connected():
+            print("✅ Conexión establecida con MySQL.")
+            return conexion
+    except Error as e:
+        print(f"❌ Error de conexión: {e}")
+        return None
+
+
+# --- Insertar cambio ---
+def sp_insertar_cambio():
+    conexion = conectar()
+    if not conexion:
+        return
+
+    try:
+        usuario_id = int(input("Ingrese el ID del usuario: "))
+        descripcion = input("Descripción del cambio: ")
+        version = input("Versión afectada: ")
+        fecha = input("Fecha del cambio (YYYY-MM-DD): ")
+
+        cur = conexion.cursor()
+        cur.callproc("sp_cambio_insertar", [usuario_id, descripcion, version, fecha])
+        conexion.commit()
+        print("✅ Cambio insertado correctamente.")
+
+    except Error as e:
+        print(f"❌ Error en sp_insertar_cambio: {e}")
     finally:
-        if cur: cur.close()
-        if cnx and cnx.is_connected(): cnx.close()
+        cur.close()
+        conexion.close()
 
+
+# --- Listar cambios activos ---
 def sp_listar_cambios_activos():
-    """
-    Llama al procedimiento almacenado sp_cambio_listar_activos().
-    Muestra todos los cambios activos.
-    """
-    cnx = cur = None
+    conexion = conectar()
+    if not conexion:
+        return
+
     try:
-        cnx = conectar()
-        cur = cnx.cursor()
+        cur = conexion.cursor()
         cur.callproc("sp_cambio_listar_activos")
 
-        print("=== CAMBIOS ACTIVOS ===")
+        print("\n📋 CAMBIOS ACTIVOS:")
+        print("-" * 120)
+
         for result in cur.stored_results():
-            # Aquí aceptamos 8 columnas (incluyendo deleted)
-            for cambio_id, usuario_id, descripcion, version, fecha_cambio, created_at, updated_at, deleted in result.fetchall():
-                print(f"ID:{cambio_id:<3} | Usuario:{usuario_id:<3} | Desc:{descripcion:<30} | Versión:{version:<10} | Fecha:{fecha_cambio} | Creado:{created_at} | Actualizado:{updated_at}")
-    except mysql.connector.Error as e:
-        print("❌ Error en sp_listar_cambios_activos:", e)
-    finally:
-        if cur: cur.close()
-        if cnx and cnx.is_connected(): cnx.close()
+            filas = result.fetchall()
 
-def sp_borrado_logico_cambio(cambio_id: int):
-    """Llama al procedimiento almacenado sp_cambio_borrado_logico(IN p_cambio_id)."""
-    cnx = cur = None
+            for fila in filas:
+                # Evita error de formato reemplazando None por cadena vacía
+                fila = ["" if v is None else v for v in fila]
+
+                cambio_id, usuario_id, descripcion, version, fecha_cambio, created_at, updated_at, deleted = fila
+
+                print(f"ID:{cambio_id:<3} | Usuario:{usuario_id:<3} | Desc:{descripcion:<35} | Versión:{version:<12} | Fecha:{fecha_cambio:<12} | Creado:{created_at:<19} | Actualizado:{updated_at:<19}")
+
+        print("-" * 120)
+
+    except Error as e:
+        print(f"❌ Error en sp_listar_cambios_activos: {e}")
+    finally:
+        cur.close()
+        conexion.close()
+
+
+# --- Borrado lógico ---
+def sp_borrado_logico_cambio():
+    conexion = conectar()
+    if not conexion:
+        return
+
     try:
-        cnx = conectar()
-        cur = cnx.cursor()
+        cambio_id = int(input("Ingrese el ID del cambio a eliminar: "))
+        cur = conexion.cursor()
         cur.callproc("sp_cambio_borrado_logico", [cambio_id])
-        cnx.commit()
-        print(f"✅ Cambio ID {cambio_id} marcado como eliminado (borrado lógico).")
-    except mysql.connector.Error as e:
-        print("❌ Error en sp_borrado_logico_cambio:", e)
-        if cnx and cnx.is_connected():
-            try: cnx.rollback()
-            except: pass
+        conexion.commit()
+        print("🗑️ Cambio marcado como eliminado correctamente.")
+    except Error as e:
+        print(f"❌ Error en sp_borrado_logico_cambio: {e}")
     finally:
-        if cur: cur.close()
-        if cnx and cnx.is_connected(): cnx.close()
+        cur.close()
+        conexion.close()
 
-# ---------------- MENÚ PRINCIPAL ----------------
+
+# --- Menú principal ---
 def menu():
-    """Muestra un menú interactivo en consola para gestionar los cambios."""
     while True:
-        print("|-----------------------------------------------|")
-        print("|         MENÚ CAMBIOS APLICACIÓN              |")
-        print("|-----------------------------------------------|")
-        print("| 1) Ingresar nuevo cambio                      |")
-        print("| 2) Listar cambios activos                     |")
-        print("| 3) Borrado lógico por ID                      |")
-        print("| 0) Salir                                     |")
-        print("|-----------------------------------------------|")
-        opcion = input("Selecciona una opción: ").strip()
+        print("\n📋 MENÚ CAMBIO DE APLICACIÓN")
+        print("1. Insertar nuevo cambio")
+        print("2. Listar cambios activos")
+        print("3. Eliminar cambio (borrado lógico)")
+        print("4. Salir")
+
+        opcion = input("Seleccione una opción: ")
 
         if opcion == "1":
-            try:
-                usuario_id = int(input("ID del usuario que aplica el cambio: ").strip())
-                descripcion = input("Descripción del cambio: ").strip()
-                version = input("Versión afectada: ").strip()
-                fecha_input = input("Fecha de cambio (AAAA-MM-DD): ").strip()
-                fecha_cambio = date.fromisoformat(fecha_input)
-                sp_insertar_cambio(usuario_id, descripcion, version, fecha_cambio)
-            except ValueError:
-                print("❌ Datos inválidos. Revisa el ID o la fecha.")
+            sp_insertar_cambio()
         elif opcion == "2":
             sp_listar_cambios_activos()
         elif opcion == "3":
-            try:
-                cambio_id = int(input("ID del cambio a eliminar: ").strip())
-                sp_borrado_logico_cambio(cambio_id)
-            except ValueError:
-                print("❌ ID inválido.")
-        elif opcion == "0":
+            sp_borrado_logico_cambio()
+        elif opcion == "4":
             print("👋 Saliendo del sistema...")
             break
         else:
-            print("❌ Opción no válida.")
+            print("❌ Opción no válida, intente de nuevo.")
 
-# ---------- PUNTO DE ENTRADA ----------
+
 if __name__ == "__main__":
     menu()
