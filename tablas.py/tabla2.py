@@ -1,82 +1,137 @@
-import mysql.connector
-from mysql.connector import errorcode
+# ==========================================
+# sp_menu_usuarios.py
+# CRUD básico con Procedimientos Almacenados (MySQL) desde Python
+# Autor: Giarella
+# Propósito: Gestionar usuarios (insertar, listar, eliminar)
+# utilizando procedimientos almacenados y el conector oficial de MySQL.
+# ==========================================
 
-# Configuración de conexión
-config = {
-    'user': 'root',           # Cambia por tu usuario MySQL
-    'password': '',           # Cambia por tu contraseña MySQL
-    'host': 'localhost',
-    'database': 'nombre_basedatos',  # Cambia por el nombre de tu base de datos
-    'raise_on_warnings': True
+import mysql.connector
+from getpass import getpass
+import hashlib
+
+# ---------- CONFIGURACIÓN DE CONEXIÓN ----------
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "1234",  # Cambia según tu configuración
+    "database": "sistema_seguridad_vial"
 }
 
-# Sentencia SQL para crear la tabla Usuarios
-TABLES = {}
-TABLES['Usuarios'] = (
+# ---------- FUNCIÓN DE CONEXIÓN ----------
+def conectar():
+    """Establece conexión con la base de datos MySQL."""
+    return mysql.connector.connect(**DB_CONFIG)
+
+# ---------- FUNCIONES PRINCIPALES ----------
+def sp_insertar_usuario(correo, contraseña, telefono, nombre, apellido, ciudad, comuna, rut, Rol_idRol):
     """
-    CREATE TABLE IF NOT EXISTS `Usuarios` (
-    `idUsuarios` INT NOT NULL AUTO_INCREMENT COMMENT 'Clave primaria, identificador único del usuario.',
-    `correo` VARCHAR(100) NOT NULL UNIQUE COMMENT 'Correo electrónico único del usuario.',
-    `contraseña` VARCHAR(255) NOT NULL COMMENT 'Contraseña hasheada del usuario.',
-    `telefono` VARCHAR(20) NULL COMMENT 'Número de teléfono del usuario.',
-    `nombre` VARCHAR(45) NOT NULL COMMENT 'Primer nombre del usuario.',
-    `apellido` VARCHAR(45) NOT NULL COMMENT 'Apellido del usuario.',
-    `ciudad` VARCHAR(45) NULL COMMENT 'Ciudad de residencia.',
-    `comuna` VARCHAR(45) NULL COMMENT 'Comuna de residencia.',
-    `rut` VARCHAR(12) NOT NULL UNIQUE COMMENT 'RUT (o DNI) único del usuario.',
-    `Fecha_registro` DATE DEFAULT (CURRENT_DATE()) COMMENT 'Fecha en la que el usuario se registró.',
-    
-    `Reporte_idReporte` INT NULL COMMENT 'ID del último reporte asociado al usuario (opcional).',
-    `Rol_idRol` INT NOT NULL COMMENT 'ID del Rol asignado al usuario (e.g., 1=General, 2=Inspector).',
-
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora de creación del registro.',
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha y hora de última modificación del registro.',
-    `deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Indicador de borrado lógico.',
-
-    PRIMARY KEY (`idUsuarios`),
-    UNIQUE INDEX `correo_UNIQUE` (`correo` ASC) VISIBLE,
-    UNIQUE INDEX `rut_UNIQUE` (`rut` ASC) VISIBLE,
-    INDEX `fk_Usuarios_Reporte1_idx` (`Reporte_idReporte` ASC) VISIBLE,
-    INDEX `fk_Usuarios_Rol1_idx` (`Rol_idRol` ASC) VISIBLE,
-
-    CONSTRAINT `fk_Usuarios_Reporte1`
-        FOREIGN KEY (`Reporte_idReporte`)
-        REFERENCES `Reporte` (`idReporte`)
-        ON DELETE SET NULL
-        ON UPDATE CASCADE,
-
-    CONSTRAINT `fk_Usuarios_Rol1`
-        FOREIGN KEY (`Rol_idRol`)
-        REFERENCES `Rol` (`idRol`)
-        ON DELETE RESTRICT
-        ON UPDATE CASCADE
-    ) ENGINE = InnoDB COMMENT = 'Tabla principal de Usuarios.';
+    Inserta un nuevo usuario llamando al procedimiento almacenado sp_usuarios_insertar.
+    La contraseña debe ingresarse en texto plano; aquí la hasheamos antes de guardar.
     """
-)
+    cnx = cur = None
+    try:
+        cnx = conectar()
+        cur = cnx.cursor()
 
-try:
-    # Conexión a MySQL
-    cnx = mysql.connector.connect(**config)
-    cursor = cnx.cursor()
-    print("Conexión establecida correctamente ✅")
+        # Hasheamos la contraseña con SHA256
+        hash_contraseña = hashlib.sha256(contraseña.encode()).hexdigest()
 
-    # Crear tabla Usuarios
-    for table_name in TABLES:
-        table_description = TABLES[table_name]
-        try:
-            print(f"Creando tabla `{table_name}`...")
-            cursor.execute(table_description)
-            print("✅ Tabla creada correctamente.")
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-                print("⚠️ La tabla ya existe.")
-            else:
-                print(err.msg)
+        args = [correo, hash_contraseña, telefono, nombre, apellido, ciudad, comuna, rut, Rol_idRol]
+        cur.callproc("sp_usuarios_insertar", args)
+        cnx.commit()
+        print(f"✅ Usuario {nombre} {apellido} insertado correctamente.")
+    except mysql.connector.Error as e:
+        print("❌ Error en sp_insertar_usuario:", e)
+        if cnx and cnx.is_connected():
+            try: cnx.rollback()
+            except: pass
+    finally:
+        if cur: cur.close()
+        if cnx and cnx.is_connected(): cnx.close()
+
+
+def sp_listar_usuarios_activos():
+    """Lista todos los usuarios activos usando sp_usuarios_listar_activos."""
+    cnx = cur = None
+    try:
+        cnx = conectar()
+        cur = cnx.cursor()
+        cur.callproc("sp_usuarios_listar_activos")
+        print("=== USUARIOS ACTIVOS ===")
+        for result in cur.stored_results():
+            for (idUsuarios, correo, telefono, nombre, apellido, rut, rol_asignado, Fecha_registro) in result.fetchall():
+                tel = telefono if telefono else "-"
+                print(f"ID:{idUsuarios:<3} | {nombre} {apellido:<20} | Correo:{correo:<25} | Tel:{tel:<12} | "
+                    f"RUT:{rut:<12} | Rol:{rol_asignado:<15} | Fecha registro:{Fecha_registro}")
+    except mysql.connector.Error as e:
+        print("❌ Error en sp_listar_usuarios_activos:", e)
+    finally:
+        if cur: cur.close()
+        if cnx and cnx.is_connected(): cnx.close()
+
+
+def sp_borrado_logico_usuario(idUsuarios: int):
+    """Aplica borrado lógico a un usuario llamando a sp_usuarios_borrado_logico."""
+    cnx = cur = None
+    try:
+        cnx = conectar()
+        cur = cnx.cursor()
+        cur.callproc("sp_usuarios_borrado_logico", [idUsuarios])
+        cnx.commit()
+        print(f"✅ Usuario ID {idUsuarios} marcado como eliminado (borrado lógico).")
+    except mysql.connector.Error as e:
+        print("❌ Error en sp_borrado_logico_usuario:", e)
+        if cnx and cnx.is_connected():
+            try: cnx.rollback()
+            except: pass
+    finally:
+        if cur: cur.close()
+        if cnx and cnx.is_connected(): cnx.close()
+
+# ---------------- MENÚ PRINCIPAL ----------------
+def menu():
+    """Menú interactivo en consola para gestionar usuarios."""
+    while True:
+        print("\n===== MENÚ USUARIOS (MySQL + SP) =====")
+        print("1) Insertar usuario")
+        print("2) Listar usuarios ACTIVOS")
+        print("3) Borrado lógico por ID")
+        print("0) Salir")
+        opcion = input("Selecciona una opción: ").strip()
+
+        if opcion == "1":
+            correo = input("Correo: ").strip()
+            contraseña = getpass("Contraseña: ").strip()
+            telefono = input("Teléfono (opcional): ").strip() or None
+            nombre = input("Nombre: ").strip()
+            apellido = input("Apellido: ").strip()
+            ciudad = input("Ciudad (opcional): ").strip() or None
+            comuna = input("Comuna (opcional): ").strip() or None
+            rut = input("RUT: ").strip()
+            try:
+                Rol_idRol = int(input("ID del rol asignado: ").strip())
+            except ValueError:
+                print("❌ ID de rol inválido.")
+                continue
+            sp_insertar_usuario(correo, contraseña, telefono, nombre, apellido, ciudad, comuna, rut, Rol_idRol)
+
+        elif opcion == "2":
+            sp_listar_usuarios_activos()
+
+        elif opcion == "3":
+            try:
+                idu = int(input("ID del usuario a eliminar: ").strip())
+                sp_borrado_logico_usuario(idu)
+            except ValueError:
+                print("❌ ID inválido.")
+
+        elif opcion == "0":
+            print("👋 Saliendo del sistema...")
+            break
         else:
-            print("OK")
+            print("❌ Opción no válida.")
 
-    cursor.close()
-    cnx.close()
-
-except mysql.connector.Error as err:
-    print(f"❌ Error de conexión: {err}")
+# ---------- PUNTO DE ENTRADA ----------
+if __name__ == "__main__":
+    menu()
